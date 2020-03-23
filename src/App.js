@@ -74,8 +74,6 @@ class App extends Component {
         });
       }
 
-      console.log(user);
-
       this.setState({
         isAuthenticated: true,
         user: Object.assign({ id: user.uid }, user)
@@ -133,6 +131,7 @@ class App extends Component {
   }
 
   async loadMessages(chatroom_id) {
+
     const loadMessageCallback = doc => {
       let id = chatroom_id;
       let docData = doc.data();
@@ -155,6 +154,17 @@ class App extends Component {
           }
         };
       });
+
+      //읽음처리
+
+      if( docData.messages && (!docData.seen || !docData.seen.hasOwnProperty(this.state.user.id) || ( docData.messages.length-1 !== docData.seen[this.state.user.id] ))) {
+
+        const seenVal = { seen : {}};
+        seenVal["seen"][this.state.user.id] = docData.messages.length-1
+
+        doc.ref.set( seenVal, {merge: true});
+
+      }
 
       this.setState({
         selectedChannel: this.state.channels.find(channel => channel.id === id),
