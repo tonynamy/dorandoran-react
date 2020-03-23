@@ -28,8 +28,6 @@ if (!firebase.apps.length) {
 
 var db = firebase.firestore();
 
-const weekKorName = ["일", "월", "화", "수", "목", "금", "토"];
-
 class App extends Component {
   constructor() {
     super();
@@ -46,15 +44,20 @@ class App extends Component {
 
   async signIn() {
     const googleProvider = new firebase.auth.GoogleAuthProvider();
+    googleProvider.setCustomParameters({
+      prompt: 'select_account'
+    });
+
     try {
-      await firebase.auth().signInWithPopup(googleProvider);
+      await firebase.auth()
+            .signInWithPopup(googleProvider);
     } catch (error) {
       console.error(error);
     }
   }
 
-  signOut() {
-    firebase.auth().signOut();
+  async signOut() {
+    await firebase.auth().signOut();
   }
 
   componentDidMount() {
