@@ -17,6 +17,7 @@ import DialogContentText from "@material-ui/core/DialogContentText";
 import Typography from "@material-ui/core/Typography";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
+import Box from "@material-ui/core/Box";
 
 import "moment/locale/ko";
 
@@ -45,12 +46,11 @@ class App extends Component {
   async signIn() {
     const googleProvider = new firebase.auth.GoogleAuthProvider();
     googleProvider.setCustomParameters({
-      prompt: 'select_account'
+      prompt: "select_account"
     });
 
     try {
-      await firebase.auth()
-            .signInWithPopup(googleProvider);
+      await firebase.auth().signInWithPopup(googleProvider);
     } catch (error) {
       console.error(error);
     }
@@ -60,18 +60,34 @@ class App extends Component {
     await firebase.auth().signOut();
   }
 
-  componentDidMount() {
-    firebase.auth().onAuthStateChanged(user => {
-      if (user) {
-        this.setState({
-          isAuthenticated: true,
-          user: Object.assign({ id: user.uid }, user)
+  async handleAuthEvent(user) {
+    if (user) {
+      let result = db.collection("users").doc(user.uid).get();
+
+      if (result.empty) {
+        // 신규회원
+
+        await db.collection("chatrooms").doc(user.uid).set({
+          displayName: user.displayName,
+          email: user.email,
+          profileImage: user.photoURL
         });
-        this.loadChatRooms();
-      } else {
-        this.setState({ isAuthenticated: false, user: {}, messages: [] });
       }
-    });
+
+      console.log(user);
+
+      this.setState({
+        isAuthenticated: true,
+        user: Object.assign({ id: user.uid }, user)
+      });
+      this.loadChatRooms();
+    } else {
+      this.setState({ isAuthenticated: false, user: {}, messages: [] });
+    }
+  }
+
+  componentDidMount() {
+    firebase.auth().onAuthStateChanged(user => this.handleAuthEvent(user));
   }
 
   loadChatRooms() {
@@ -241,7 +257,7 @@ class App extends Component {
   renderAuthPopup() {
     return (
       <Dialog open={!this.state.isAuthenticated}>
-        <DialogTitle id="simple-dialog-title">로그인</DialogTitle>
+        <DialogTitle id="simple-dialog-title">로그인/회원가입</DialogTitle>
         <div>
           <List>
             <ListItem button onClick={() => this.signIn()}>
@@ -254,9 +270,15 @@ class App extends Component {
                   />
                 </Avatar>
               </ListItemAvatar>
-              <ListItemText primary="구글 로그인" />
+              <ListItemText primary="GOOGLE로 로그인" />
             </ListItem>
           </List>
+          <Box color="primary.main" mx={5} my={2}>
+            구글 로그인 시 신규 회원은 자동으로 회원가입됩니다.
+          </Box>
+          <Box color="primary.main" mx={5} my={2}>
+            로그인 시 사이트 개인정보처리방침에 동의함하는 것으로 간주됩니다.
+          </Box>
         </div>
       </Dialog>
     );
