@@ -10,11 +10,15 @@ import ListItemAvatar from "@material-ui/core/ListItemAvatar";
 import ListItemText from "@material-ui/core/ListItemText";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import Dialog from "@material-ui/core/Dialog";
+import TextField from "@material-ui/core/TextField";
+import DialogActions from "@material-ui/core/DialogActions";
+import DialogContent from "@material-ui/core/DialogContent";
+import DialogContentText from "@material-ui/core/DialogContentText";
 import Typography from "@material-ui/core/Typography";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 
-import 'moment/locale/ko'
+import "moment/locale/ko";
 
 import firebaseConfig from "./firebaseConfig.json";
 
@@ -24,7 +28,7 @@ if (!firebase.apps.length) {
 
 var db = firebase.firestore();
 
-const weekKorName=['일', '월', '화', '수', '목', '금', '토'];
+const weekKorName = ["일", "월", "화", "수", "목", "금", "토"];
 
 class App extends Component {
   constructor() {
@@ -34,6 +38,7 @@ class App extends Component {
       user: {},
       channels: [],
       isAuthenticated: false,
+      addingChatRoom: false,
       selectedChannel: {},
       channelUsers: []
     };
@@ -114,7 +119,10 @@ class App extends Component {
       let docData = doc.data();
       let channelUsers = this.state.channelUsers;
 
-      let messages = docData.messages.map(function (message, idx) {
+      let messages = (docData.messages ? docData.messages : []).map(function (
+        message,
+        idx
+      ) {
         let chatUser = channelUsers.find(user => user.id === message.uid);
 
         return {
@@ -122,9 +130,9 @@ class App extends Component {
           text: message.content,
           createdAt: new Date(message.createdAt.seconds * 1000),
           user: {
-            id: chatUser.id,
-            name: chatUser.displayName,
-            avatar: chatUser.profileImage
+            id: chatUser ? chatUser.id : -1,
+            name: chatUser ? chatUser.displayName : "알 수 없는 사용자",
+            avatar: chatUser ? chatUser.profileImage : ""
           }
         };
       });
@@ -153,7 +161,81 @@ class App extends Component {
     db.collection("chatrooms").doc(chatroom_id).onSnapshot(loadMessageCallback);
   }
 
-  renderPopup() {
+  toggleAddingChatRoom() {
+    this.setState({ addingChatRoom: !this.state.addingChatRoom });
+  }
+
+  async handleAddChatting() {
+    let email = this.state.addChatingEmailAddress;
+
+    let usersRef = db.collection("users");
+    let query = usersRef.where("email", "==", email);
+
+    let result = await query.get();
+
+    if (result.empty) {
+      alert("사용자를 찾을 수 없습니다.");
+
+      this.setState({ addingChatRoom: false, addChatingEmailAddress: "" });
+    } else {
+      let me = usersRef.doc(this.state.user.id);
+      let friend = result.docs[0].ref;
+
+      await db.collection("chatrooms").add({
+        displayName: result.docs[0].data().displayName,
+        users: [me, friend]
+      });
+
+      this.setState({ addingChatRoom: false, addChatingEmailAddress: "" });
+    }
+  }
+
+  renderAddChatRoomPopup() {
+    const handleClose = () => {
+      this.toggleAddingChatRoom();
+    };
+
+    const handleChange = event => {
+      this.setState({ addChatingEmailAddress: event.target.value });
+    };
+
+    return (
+      <div>
+        <Dialog
+          open={this.state.addingChatRoom}
+          onClose={handleClose}
+          aria-labelledby="form-dialog-title"
+        >
+          <DialogTitle id="form-dialog-title">채팅 추가</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              채팅 상대의 이메일 주소를 입력해주세요.
+            </DialogContentText>
+            <TextField
+              autoFocus
+              margin="dense"
+              id="name"
+              label="이메일 주소"
+              type="email"
+              value={this.state.addChatingEmailAddress}
+              onChange={handleChange}
+              fullWidth
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleClose} color="primary">
+              취소
+            </Button>
+            <Button onClick={() => this.handleAddChatting()} color="primary">
+              채팅 추가
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </div>
+    );
+  }
+
+  renderAuthPopup() {
     return (
       <Dialog open={!this.state.isAuthenticated}>
         <DialogTitle id="simple-dialog-title">로그인</DialogTitle>
@@ -220,29 +302,31 @@ class App extends Component {
   }
 
   renderChannels() {
-    const channelItems = this.state.channels.map(channel => (
-      <ListItem
-        button
-        key={channel.id}
-        onClick={() => this.onChatRoomClicked(channel.id)}
-      >
-        <ListItemAvatar>
-          <Avatar
-            alt="아바타"
-            src={
-              channel.userModels.find(model => model.id !== this.state.user.id)
-                .profileImage
-            }
-          ></Avatar>
-        </ListItemAvatar>
-        <ListItemText
-          primary={
-            channel.userModels.find(model => model.id !== this.state.user.id)
-              .displayName
-          }
-        />
-      </ListItem>
-    ));
+    const mapChannelItems = channel => {
+      const friend = channel.userModels.find(
+        model => model.id !== this.state.user.id
+      );
+
+      return (
+        <ListItem
+          button
+          key={channel.id}
+          onClick={() => this.onChatRoomClicked(channel.id)}
+        >
+          <ListItemAvatar>
+            <Avatar
+              alt="아바타"
+              src={friend ? friend.profileImage : ""}
+            ></Avatar>
+          </ListItemAvatar>
+          <ListItemText
+            primary={friend ? friend.displayName : "알 수 없는 사용자"}
+          />
+        </ListItem>
+      );
+    };
+
+    const channelItems = this.state.channels.map(mapChannelItems);
 
     return <List>{channelItems}</List>;
   }
@@ -251,16 +335,22 @@ class App extends Component {
     return (
       <AppBar position="static" color="default">
         <Toolbar>
-          <Typography variant="h6" color="inherit">
+          <Typography variant="h6" color="inherit" style={{ flex: 1 }}>
             채팅방
           </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => this.toggleAddingChatRoom()}
+          >
+            채팅추가
+          </Button>
         </Toolbar>
       </AppBar>
     );
   }
   renderChatHeader() {
-    
-    if (Object.keys(this.state.selectedChannel).length===0)
+    if (Object.keys(this.state.selectedChannel).length === 0) {
       return (
         <AppBar position="static" color="default">
           <Toolbar>
@@ -270,20 +360,20 @@ class App extends Component {
           </Toolbar>
         </AppBar>
       );
-    else
+    } else {
+      const friend = this.state.selectedChannel.userModels.find(
+        model => model.id !== this.state.user.id
+      );
       return (
         <AppBar position="static" color="default">
           <Toolbar>
             <Typography variant="h6" color="inherit">
-              {
-                this.state.selectedChannel.userModels.find(
-                  model => model.id !== this.state.user.id
-                ).displayName
-              }
+              {friend ? friend.displayName : "알 수 없는 사용자"}
             </Typography>
           </Toolbar>
         </AppBar>
       );
+    }
   }
   renderSettingsHeader() {
     return (
@@ -300,7 +390,8 @@ class App extends Component {
   render() {
     return (
       <div style={styles.container}>
-        {this.renderPopup()}
+        {this.renderAuthPopup()}
+        {this.renderAddChatRoomPopup()}
         <div style={styles.channelList}>
           {this.renderChannelsHeader()}
           {this.renderChannels()}
