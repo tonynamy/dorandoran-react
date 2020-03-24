@@ -18,6 +18,7 @@ import Typography from "@material-ui/core/Typography";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Box from "@material-ui/core/Box";
+import Fab from "@material-ui/core/Fab";
 
 import "moment/locale/ko";
 
@@ -30,7 +31,6 @@ if (!firebase.apps.length) {
 var db = firebase.firestore();
 
 class App extends Component {
-
   unsubscribeChatSnapshotListener = null;
 
   constructor() {
@@ -92,7 +92,6 @@ class App extends Component {
   }
 
   loadChatRooms() {
-
     const chatRoomCallback = querySnapshot => {
       this.loadChatRoomInfo(querySnapshot);
     };
@@ -131,7 +130,7 @@ class App extends Component {
   }
 
   onChatRoomClicked(chatroom_id) {
-    if(this.unsubscribeChatSnapshotListener!==null) {
+    if (this.unsubscribeChatSnapshotListener !== null) {
       this.unsubscribeChatSnapshotListener();
       this.unsubscribeChatSnapshotListener = null;
     }
@@ -139,7 +138,6 @@ class App extends Component {
   }
 
   async loadMessages(chatroom_id) {
-
     const loadMessageCallback = doc => {
       let id = chatroom_id;
       let docData = doc.data();
@@ -149,14 +147,15 @@ class App extends Component {
         message,
         idx
       ) {
-
         let chatUser = channelUsers.find(user => user.id === message.uid);
-        let notChatUser = channelUsers.find(user=>user.id !== message.uid);
+        let notChatUser = channelUsers.find(user => user.id !== message.uid);
 
-        notChatUser = notChatUser ? notChatUser : {id:-1};
+        notChatUser = notChatUser ? notChatUser : { id: -1 };
 
-        let chatSeenIdx = docData.seen.hasOwnProperty(notChatUser.id) ? docData.seen[notChatUser.id] : -1;
-        let chatSeen = idx*1 <= chatSeenIdx*1 ? true : false;
+        let chatSeenIdx = docData.seen.hasOwnProperty(notChatUser.id)
+          ? docData.seen[notChatUser.id]
+          : -1;
+        let chatSeen = idx * 1 <= chatSeenIdx * 1 ? true : false;
 
         return {
           id: idx,
@@ -168,19 +167,22 @@ class App extends Component {
             avatar: chatUser ? chatUser.profileImage : ""
           },
           sent: chatSeen,
-          received: chatSeen,
+          received: chatSeen
         };
       });
 
       //읽음처리
 
-      if( docData.messages && (!docData.seen || !docData.seen.hasOwnProperty(this.state.user.id) || ( docData.messages.length-1 !== docData.seen[this.state.user.id] ))) {
+      if (
+        docData.messages &&
+        (!docData.seen ||
+          !docData.seen.hasOwnProperty(this.state.user.id) ||
+          docData.messages.length - 1 !== docData.seen[this.state.user.id])
+      ) {
+        const seenVal = { seen: {} };
+        seenVal["seen"][this.state.user.id] = docData.messages.length - 1;
 
-        const seenVal = { seen : {}};
-        seenVal["seen"][this.state.user.id] = docData.messages.length-1
-
-        doc.ref.set( seenVal, {merge: true});
-
+        doc.ref.set(seenVal, { merge: true });
       }
 
       this.setState({
@@ -204,7 +206,10 @@ class App extends Component {
 
     this.setState({ channelUsers: userInfos });
 
-    this.unsubscribeChatSnapshotListener = db.collection("chatrooms").doc(chatroom_id).onSnapshot(loadMessageCallback);
+    this.unsubscribeChatSnapshotListener = db
+      .collection("chatrooms")
+      .doc(chatroom_id)
+      .onSnapshot(loadMessageCallback);
   }
 
   toggleAddingChatRoom() {
@@ -355,9 +360,14 @@ class App extends Component {
 
   renderChannels() {
     const mapChannelItems = channel => {
+
       const friend = channel.userModels.find(
         model => model.id !== this.state.user.id
       );
+
+      const unreadMessageCount = ( channel.messages ? channel.messages.length : 0 )
+                                 - ( channel.seen.hasOwnProperty(this.state.user.id) ? channel.seen[this.state.user.id] : -1 )
+                                 - 1;
 
       return (
         <ListItem
@@ -372,8 +382,10 @@ class App extends Component {
             ></Avatar>
           </ListItemAvatar>
           <ListItemText
+            style={styles.chatRoomText}
             primary={friend ? friend.displayName : "알 수 없는 사용자"}
           />
+          {unreadMessageCount > 0 && <Fab aria-label="new message" size="small" color="secondary">{unreadMessageCount}</Fab> }
         </ListItem>
       );
     };
@@ -486,6 +498,9 @@ const styles = {
     display: "flex",
     flex: 1,
     flexDirection: "column"
+  },
+  chatRoomText: {
+    marginLeft: 10
   }
 };
 
