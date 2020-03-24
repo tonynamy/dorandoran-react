@@ -152,7 +152,7 @@ class App extends Component {
 
         notChatUser = notChatUser ? notChatUser : { id: -1 };
 
-        let chatSeenIdx = docData.seen.hasOwnProperty(notChatUser.id)
+        let chatSeenIdx = docData.seen&&docData.seen.hasOwnProperty(notChatUser.id)
           ? docData.seen[notChatUser.id]
           : -1;
         let chatSeen = idx * 1 <= chatSeenIdx * 1 ? true : false;
@@ -361,13 +361,17 @@ class App extends Component {
   renderChannels() {
     const mapChannelItems = channel => {
 
+      console.log(channel);
+
       const friend = channel.userModels.find(
         model => model.id !== this.state.user.id
       );
 
       const unreadMessageCount = ( channel.messages ? channel.messages.length : 0 )
-                                 - ( channel.seen.hasOwnProperty(this.state.user.id) ? channel.seen[this.state.user.id] : -1 )
+                                 - ( channel.seen && channel.seen.hasOwnProperty(this.state.user.id) ? channel.seen[this.state.user.id] : -1 )
                                  - 1;
+
+      const lastMessage = channel.messages && channel.messages.length > 0 ? channel.messages[channel.messages.length-1].content : "";
 
       return (
         <ListItem
@@ -384,7 +388,9 @@ class App extends Component {
           <ListItemText
             style={styles.chatRoomText}
             primary={friend ? friend.displayName : "알 수 없는 사용자"}
+            secondary = {lastMessage}
           />
+
           {unreadMessageCount > 0 && <Fab aria-label="new message" size="small" color="secondary">{unreadMessageCount}</Fab> }
         </ListItem>
       );
