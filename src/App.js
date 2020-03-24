@@ -19,6 +19,7 @@ import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Box from "@material-ui/core/Box";
 import Fab from "@material-ui/core/Fab";
+import CircularProgress from '@material-ui/core/CircularProgress';
 
 import "moment/locale/ko";
 
@@ -43,7 +44,8 @@ class App extends Component {
       addingChatRoom: false,
       selectedChannel: {},
       channelUsers: [],
-      isLeaving: false
+      isLeaving: false,
+      loadingMessages: false,
     };
   }
 
@@ -139,6 +141,12 @@ class App extends Component {
   }
 
   async loadMessages(chatroom_id) {
+
+    this.setState({
+      selectedChannel: this.state.channels.find(channel => channel.id === chatroom_id),
+      loadingMessages: true,
+    });
+
     const loadMessageCallback = doc => {
       let id = chatroom_id;
       let docData = doc.data();
@@ -189,7 +197,8 @@ class App extends Component {
 
       this.setState({
         selectedChannel: this.state.channels.find(channel => channel.id === id),
-        messages: messages
+        messages: messages,
+        loadingMessages: false,
       });
     };
 
@@ -517,6 +526,7 @@ class App extends Component {
             <Typography variant="h6" color="inherit">
               {friend ? friend.displayName : "알 수 없는 사용자"}
             </Typography>
+            { this.state.loadingMessages && <CircularProgress /> }
           </Toolbar>
         </AppBar>
       );
