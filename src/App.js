@@ -42,7 +42,8 @@ class App extends Component {
       isAuthenticated: false,
       addingChatRoom: false,
       selectedChannel: {},
-      channelUsers: []
+      channelUsers: [],
+      isLeaving: false
     };
   }
 
@@ -152,9 +153,10 @@ class App extends Component {
 
         notChatUser = notChatUser ? notChatUser : { id: -1 };
 
-        let chatSeenIdx = docData.seen&&docData.seen.hasOwnProperty(notChatUser.id)
-          ? docData.seen[notChatUser.id]
-          : -1;
+        let chatSeenIdx =
+          docData.seen && docData.seen.hasOwnProperty(notChatUser.id)
+            ? docData.seen[notChatUser.id]
+            : -1;
         let chatSeen = idx * 1 <= chatSeenIdx * 1 ? true : false;
 
         return {
@@ -336,15 +338,81 @@ class App extends Component {
       });
   }
 
-  renderSignOutButton() {
-    if (this.state.isAuthenticated) {
-      return <Button onClick={() => this.signOut()}>로그아웃</Button>;
+  async leaveChatRoom() {
+    if (Object.keys(this.state.selectedChannel).length === 0) {
+      this.setState({isLeaving: false});
+      return;
     }
-    return null;
+
+    await db
+      .collection("chatrooms")
+      .doc(this.state.selectedChannel.id)
+      .update({
+        users: firebase.firestore.FieldValue.arrayRemove(
+          db.collection("users").doc(this.state.user.id)
+        )
+      });
+    this.setState({ selectedChannel: {}, isLeaving: false });
+  }
+
+  renderSignOutButton() {
+    let settingsJSX = [];
+
+    if (Object.keys(this.state.selectedChannel).length !== 0) {
+      const handleLeave = () => {
+        this.leaveChatRoom();
+      };
+
+      const leaveDialog = (
+        <div>
+          <Dialog
+            open={this.state.isLeaving}
+            aria-labelledby="alert-dialog-title"
+            aria-describedby="alert-dialog-description"
+          >
+            <DialogTitle id="alert-dialog-title">
+              {"채팅방을 나가시겠습니까?"}
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText id="alert-dialog-description">
+                채팅방에서 나가면 다시 입장할 수 없습니다. (새 채팅을 시작하는
+                것은 가능합니다.)
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => this.setState({ isLeaving: false })}
+                color="primary"
+              >
+                취소
+              </Button>
+              <Button onClick={handleLeave} color="primary" autoFocus>
+                나가기
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </div>
+      );
+
+      settingsJSX.push(leaveDialog);
+      settingsJSX.push(
+        <Button onClick={() => this.setState({ isLeaving: true })}>
+          채팅방 나가기
+        </Button>
+      );
+    }
+
+    if (this.state.isAuthenticated) {
+      settingsJSX.push(
+        <Button onClick={() => this.signOut()}>로그아웃</Button>
+      );
+    }
+
+    return settingsJSX;
   }
 
   renderChat() {
-    if (!this.state.selectedChannel) return;
+    if (Object.keys(this.state.selectedChannel).length === 0) return;
 
     return (
       <GiftedChat
@@ -360,18 +428,23 @@ class App extends Component {
 
   renderChannels() {
     const mapChannelItems = channel => {
-
       console.log(channel);
 
       const friend = channel.userModels.find(
         model => model.id !== this.state.user.id
       );
 
-      const unreadMessageCount = ( channel.messages ? channel.messages.length : 0 )
-                                 - ( channel.seen && channel.seen.hasOwnProperty(this.state.user.id) ? channel.seen[this.state.user.id] : -1 )
-                                 - 1;
+      const unreadMessageCount =
+        (channel.messages ? channel.messages.length : 0) -
+        (channel.seen && channel.seen.hasOwnProperty(this.state.user.id)
+          ? channel.seen[this.state.user.id]
+          : -1) -
+        1;
 
-      const lastMessage = channel.messages && channel.messages.length > 0 ? channel.messages[channel.messages.length-1].content : "";
+      const lastMessage =
+        channel.messages && channel.messages.length > 0
+          ? channel.messages[channel.messages.length - 1].content
+          : "";
 
       return (
         <ListItem
@@ -388,10 +461,14 @@ class App extends Component {
           <ListItemText
             style={styles.chatRoomText}
             primary={friend ? friend.displayName : "알 수 없는 사용자"}
-            secondary = {lastMessage}
+            secondary={lastMessage}
           />
 
-          {unreadMessageCount > 0 && <Fab aria-label="new message" size="small" color="secondary">{unreadMessageCount}</Fab> }
+          {unreadMessageCount > 0 && (
+            <Fab aria-label="new message" size="small" color="secondary">
+              {unreadMessageCount}
+            </Fab>
+          )}
         </ListItem>
       );
     };
