@@ -30,6 +30,9 @@ if (!firebase.apps.length) {
 var db = firebase.firestore();
 
 class App extends Component {
+
+  unsubscribeChatSnapshotListener = null;
+
   constructor() {
     super();
     this.state = {
@@ -89,6 +92,7 @@ class App extends Component {
   }
 
   loadChatRooms() {
+
     const chatRoomCallback = querySnapshot => {
       this.loadChatRoomInfo(querySnapshot);
     };
@@ -127,6 +131,10 @@ class App extends Component {
   }
 
   onChatRoomClicked(chatroom_id) {
+    if(this.unsubscribeChatSnapshotListener!==null) {
+      this.unsubscribeChatSnapshotListener();
+      this.unsubscribeChatSnapshotListener = null;
+    }
     this.loadMessages(chatroom_id);
   }
 
@@ -141,7 +149,14 @@ class App extends Component {
         message,
         idx
       ) {
+
         let chatUser = channelUsers.find(user => user.id === message.uid);
+        let notChatUser = channelUsers.find(user=>user.id !== message.uid);
+
+        notChatUser = notChatUser ? notChatUser : {id:-1};
+
+        let chatSeenIdx = docData.seen.hasOwnProperty(notChatUser.id) ? docData.seen[notChatUser.id] : -1;
+        let chatSeen = idx*1 <= chatSeenIdx*1 ? true : false;
 
         return {
           id: idx,
@@ -151,7 +166,9 @@ class App extends Component {
             id: chatUser ? chatUser.id : -1,
             name: chatUser ? chatUser.displayName : "알 수 없는 사용자",
             avatar: chatUser ? chatUser.profileImage : ""
-          }
+          },
+          sent: chatSeen,
+          received: chatSeen,
         };
       });
 
@@ -187,7 +204,7 @@ class App extends Component {
 
     this.setState({ channelUsers: userInfos });
 
-    db.collection("chatrooms").doc(chatroom_id).onSnapshot(loadMessageCallback);
+    this.unsubscribeChatSnapshotListener = db.collection("chatrooms").doc(chatroom_id).onSnapshot(loadMessageCallback);
   }
 
   toggleAddingChatRoom() {
