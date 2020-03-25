@@ -1,10 +1,12 @@
 import React, { Component } from "react";
 import ReactDOM from "react-dom";
-import { GiftedChat } from "react-web-gifted-chat";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { GiftedChat, MessageImage, Send } from "react-web-gifted-chat";
 import firebase from "firebase";
 import Button from "@material-ui/core/Button";
 import Avatar from "@material-ui/core/Avatar";
 import List from "@material-ui/core/List";
+import Divider from "@material-ui/core/Divider";
 import ListItem from "@material-ui/core/ListItem";
 import ListItemAvatar from "@material-ui/core/ListItemAvatar";
 import ListItemText from "@material-ui/core/ListItemText";
@@ -19,8 +21,23 @@ import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Box from "@material-ui/core/Box";
 import Fab from "@material-ui/core/Fab";
-import CircularProgress from '@material-ui/core/CircularProgress';
-
+import Paper from "@material-ui/core/Paper";
+import EmojiEmotionsIcon from "@material-ui/icons/EmojiEmotions";
+import CircularProgress from "@material-ui/core/CircularProgress";
+import Popper from "@material-ui/core/Popper";
+import Tabs from "@material-ui/core/Tabs";
+import Tab from "@material-ui/core/Tab";
+import GridList from "@material-ui/core/GridList";
+import GridListTile from "@material-ui/core/GridListTile";
+import IconButton from "@material-ui/core/IconButton";
+import MenuIcon from "@material-ui/icons/Menu";
+import AccountCircle from "@material-ui/icons/AccountCircle";
+import Image from "react-image-resizer";
+import MenuItem from "@material-ui/core/MenuItem";
+import Menu from "@material-ui/core/Menu";
+import Drawer from "@material-ui/core/Drawer";
+import MoreIcon from "@material-ui/icons/MoreVert";
+import withWidth, { isWidthUp } from "@material-ui/core/withWidth";
 import "moment/locale/ko";
 
 import firebaseConfig from "./firebaseConfig.json";
@@ -29,13 +46,27 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <Paper style={{ padding: 0 }}>
+      {value === index && <Box p={1}>{children}</Box>}
+    </Paper>
+  );
+}
+
 var db = firebase.firestore();
+var storage = firebase.storage();
 
 class App extends Component {
   unsubscribeChatSnapshotListener = null;
 
   constructor() {
     super();
+    this.emoticonShowBtnRef = React.createRef();
+    this.menuAnchorEl = React.createRef();
+    this.giftedChatRef = React.createRef();
     this.state = {
       messages: [],
       user: {},
@@ -46,6 +77,11 @@ class App extends Component {
       channelUsers: [],
       isLeaving: false,
       loadingMessages: false,
+      isShowingEmoticons: false,
+      emoticonTabNum: 0,
+      emoticonPacks: null,
+      isDrawerOpen: false,
+      isMenuOpen: false
     };
   }
 
@@ -133,6 +169,7 @@ class App extends Component {
   }
 
   onChatRoomClicked(chatroom_id) {
+    this.setState({ isDrawerOpen: false });
     if (this.unsubscribeChatSnapshotListener !== null) {
       this.unsubscribeChatSnapshotListener();
       this.unsubscribeChatSnapshotListener = null;
@@ -141,11 +178,16 @@ class App extends Component {
   }
 
   async loadMessages(chatroom_id) {
-
     this.setState({
-      selectedChannel: this.state.channels.find(channel => channel.id === chatroom_id),
-      loadingMessages: true,
+      selectedChannel: this.state.channels.find(
+        channel => channel.id === chatroom_id
+      ),
+      loadingMessages: true
     });
+
+    await this.loadEmoticons();
+
+    const emoticonPacks = this.state.emoticonPacks;
 
     const loadMessageCallback = doc => {
       let id = chatroom_id;
@@ -167,9 +209,41 @@ class App extends Component {
             : -1;
         let chatSeen = idx * 1 <= chatSeenIdx * 1 ? true : false;
 
-        return {
+        let contentObj = {};
+
+        if (!message.emoticon || Object.values(message.emoticon) === 0) {
+          contentObj = { text: message.content };
+        } else {
+          let emoticon = message.emoticon;
+          let emoticonPackId = emoticon.emoticonPackId
+            ? emoticon.emoticonPackId
+            : "";
+          let emoticonDisplayName = emoticon.displayName
+            ? emoticon.displayName
+            : "";
+
+          let emoticonPack = emoticonPacks.find(
+            emoticonPack => emoticonPack.id === emoticon.emoticonPackId
+          );
+
+          if (!emoticonPack || !emoticonPack.emoticons) {
+            contentObj = { text: message.content };
+          } else {
+            let matchEmoticon = emoticonPack.emoticons.find(
+              emObj => emObj.displayName === emoticonDisplayName
+            );
+
+            if (!matchEmoticon || !matchEmoticon.url) {
+              contentObj = { text: message.content };
+            } else {
+              contentObj = { image: matchEmoticon.url };
+            }
+          }
+        }
+
+        return Object.assign(contentObj, {
           id: idx,
-          text: message.content,
+
           createdAt: new Date(message.createdAt.seconds * 1000),
           user: {
             id: chatUser ? chatUser.id : -1,
@@ -178,7 +252,7 @@ class App extends Component {
           },
           sent: chatSeen,
           received: chatSeen
-        };
+        });
       });
 
       //읽음처리
@@ -198,7 +272,7 @@ class App extends Component {
       this.setState({
         selectedChannel: this.state.channels.find(channel => channel.id === id),
         messages: messages,
-        loadingMessages: false,
+        loadingMessages: false
       });
     };
 
@@ -320,7 +394,7 @@ class App extends Component {
             구글 로그인 시 신규 회원은 자동으로 회원가입됩니다.
           </Box>
           <Box color="primary.main" mx={5} my={2}>
-            로그인 시 사이트 개인정보처리방침에 동의함하는 것으로 간주됩니다.
+            로그인 시 사이트 개인정보처리방침에 동의하는 것으로 간주됩니다.
           </Box>
         </div>
       </Dialog>
@@ -347,9 +421,26 @@ class App extends Component {
       });
   }
 
+  sendEmoticon(emoticonPack, emoticon) {
+    return firebase
+      .firestore()
+      .collection("chatrooms")
+      .doc(this.state.selectedChannel.id)
+      .update({
+        messages: firebase.firestore.FieldValue.arrayUnion({
+          createdAt: new Date(),
+          uid: this.state.user.id,
+          emoticon: {
+            emoticonPackId: emoticonPack.id,
+            displayName: emoticon.displayName
+          }
+        })
+      });
+  }
+
   async leaveChatRoom() {
     if (Object.keys(this.state.selectedChannel).length === 0) {
-      this.setState({isLeaving: false});
+      this.setState({ isLeaving: false });
       return;
     }
 
@@ -364,72 +455,202 @@ class App extends Component {
     this.setState({ selectedChannel: {}, isLeaving: false });
   }
 
-  renderSignOutButton() {
-    let settingsJSX = [];
+  async loadEmoticons() {
+    this.setState({ emoticonPacks: null });
+    let result = await db.collection("emoticons").get();
 
-    if (Object.keys(this.state.selectedChannel).length !== 0) {
-      const handleLeave = () => {
-        this.leaveChatRoom();
-      };
+    if (result.empty) return this.setState({ emoticonPacks: [] });
 
-      const leaveDialog = (
-        <div>
-          <Dialog
-            open={this.state.isLeaving}
-            aria-labelledby="alert-dialog-title"
-            aria-describedby="alert-dialog-description"
-          >
-            <DialogTitle id="alert-dialog-title">
-              {"채팅방을 나가시겠습니까?"}
-            </DialogTitle>
-            <DialogContent>
-              <DialogContentText id="alert-dialog-description">
-                채팅방에서 나가면 다시 입장할 수 없습니다. (새 채팅을 시작하는
-                것은 가능합니다.)
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                onClick={() => this.setState({ isLeaving: false })}
-                color="primary"
-              >
-                취소
-              </Button>
-              <Button onClick={handleLeave} color="primary" autoFocus>
-                나가기
-              </Button>
-            </DialogActions>
-          </Dialog>
-        </div>
-      );
+    let emoticonPacks = [];
+    let emoticonUrlPromises = [];
 
-      settingsJSX.push(leaveDialog);
-      settingsJSX.push(
-        <Button onClick={() => this.setState({ isLeaving: true })}>
-          채팅방 나가기
-        </Button>
+    let emoticonPackMap = [];
+    let emoticonObjectMap = [];
+
+    for (const doc of result.docs) {
+      let emoticonPackId = doc.id;
+      let emoticonPack = doc.data();
+
+      let emoticonStorageRefs = await storage
+        .ref("emoticons")
+        .child(emoticonPackId)
+        .listAll();
+
+      emoticonStorageRefs.items.forEach(ref => {
+        emoticonUrlPromises.push(ref.getDownloadURL());
+
+        emoticonPackMap.push(emoticonPackId);
+        emoticonObjectMap.push({ displayName: ref.name });
+      });
+
+      emoticonPacks.push(
+        Object.assign({ id: emoticonPackId, emoticons: [] }, emoticonPack)
       );
     }
 
-    if (this.state.isAuthenticated) {
-      settingsJSX.push(
-        <Button onClick={() => this.signOut()}>로그아웃</Button>
-      );
-    }
+    let emoticonUrls = await Promise.all(emoticonUrlPromises);
 
-    return settingsJSX;
+    // Map emoticonUrls to emoticonPack
+    emoticonUrls.forEach((emoticonUrl, idx) => {
+      let emoticonPack = emoticonPacks.find(
+        pack => pack.id === emoticonPackMap[idx]
+      );
+
+      if (!emoticonPack) return false;
+
+      emoticonPack.emoticons.push(
+        Object.assign({ url: emoticonUrl }, emoticonObjectMap[idx])
+      );
+    });
+
+    this.setState({ emoticonPacks: emoticonPacks });
   }
 
   renderChat() {
     if (Object.keys(this.state.selectedChannel).length === 0) return;
 
+    const open = Boolean(this.state.isShowingEmoticons);
+    const id = open && this.emoticonShowBtnRef ? "emoticon-popper" : undefined;
+
+    const sendCallback = messages => {
+      this.onSend(messages);
+    };
+
+    const toggleEmoticonOpen = () => {
+      this.setState({ isShowingEmoticons: !this.state.isShowingEmoticons });
+    };
+
+    const handleClose = () => {
+      toggleEmoticonOpen();
+    };
+
+    const handleEmotcionTabChange = (event, newValue) => {
+      this.setState({ emoticonTabNum: newValue });
+    };
+
+    const emoticonSize = 100;
+    const emoticonsPerRow = 3;
+
+    const sendEmoticonCallback = (emoticonPack, emoticon) => {
+      this.sendEmoticon(emoticonPack, emoticon);
+      toggleEmoticonOpen();
+    };
+
+    const renderSend = props => {
+      return (
+        <div style={{ display: "inline-flex" }}>
+          {!this.state.emoticonPacks ? (
+            <Button>
+              <CircularProgress size={24} />
+            </Button>
+          ) : this.state.emoticonPacks.length === 0 ? (
+            <div></div>
+          ) : (
+            <Button
+              aria-describedby={id}
+              alignItems="center"
+              justify="center"
+              onClick={toggleEmoticonOpen}
+              ref={this.emoticonShowBtnRef}
+            >
+              <EmojiEmotionsIcon />
+            </Button>
+          )}
+          {this.state.emoticonPacks && (
+            <Popper
+              id={id}
+              open={open}
+              anchorEl={this.emoticonShowBtnRef.current}
+              onClose={handleClose}
+              placement="top"
+              transition
+            >
+              <AppBar position="static">
+                <Tabs
+                  value={this.state.emoticonTabNum}
+                  onChange={handleEmotcionTabChange}
+                  aria-label="emoticons"
+                >
+                  {this.state.emoticonPacks.map((emoticonPack, idx) => (
+                    <Tab label={emoticonPack.displayName} />
+                  ))}
+                </Tabs>
+              </AppBar>
+
+              {this.state.emoticonPacks.map((emoticonPack, idx) => (
+                <TabPanel
+                  value={this.state.emoticonTabNum}
+                  index={idx}
+                  style={{ padding: 0 }}
+                >
+                  <div className={styles.root}>
+                    <GridList
+                      cellHeight={160}
+                      className={styles.gridList}
+                      cols={emoticonsPerRow}
+                      style={{
+                        width: emoticonSize * emoticonsPerRow,
+                        height: emoticonSize * emoticonsPerRow,
+                        padding: 0
+                      }}
+                    >
+                      {emoticonPack.emoticons.map((emoticon, eIdx) => (
+                        <GridListTile
+                          key={emoticonPack.id + "/" + emoticon.displayName}
+                          cols={1}
+                          rows={1}
+                          style={{ width: emoticonSize, height: emoticonSize }}
+                          onClick={() => {
+                            sendEmoticonCallback(emoticonPack, emoticon);
+                          }}
+                        >
+                          <Image
+                            src={emoticon.url}
+                            height={emoticonSize}
+                            width={emoticonSize}
+                          />
+                        </GridListTile>
+                      ))}
+                    </GridList>
+                  </div>
+                </TabPanel>
+              ))}
+            </Popper>
+          )}
+
+          <Send {...props}>
+            <Button variant="contained" color="primary">
+              전송
+            </Button>
+          </Send>
+        </div>
+      );
+    };
+
+    const messageImageRenderer = props => {
+      return (
+        <MessageImage
+          {...props}
+          imageStyle={{
+            height: 150,
+            width: 150
+          }}
+        />
+      );
+    };
+
     return (
       <GiftedChat
+        ref={this.giftedChatRef}
         user={this.state.user}
         messages={this.state.messages.slice().reverse()}
-        onSend={messages => this.onSend(messages)}
+        onSend={sendCallback}
         placeholder="메시지를 입력해주세요."
+        renderSend={renderSend}
+        renderMessageImage={messageImageRenderer}
+        scrollToBottom={true}
         locale="ko"
+        scrollToBottom="true"
         dateFormat="YYYY년 MM월 DD일 dddd"
       />
     );
@@ -437,8 +658,6 @@ class App extends Component {
 
   renderChannels() {
     const mapChannelItems = channel => {
-      console.log(channel);
-
       const friend = channel.userModels.find(
         model => model.id !== this.state.user.id
       );
@@ -452,7 +671,14 @@ class App extends Component {
 
       const lastMessage =
         channel.messages && channel.messages.length > 0
-          ? channel.messages[channel.messages.length - 1].content
+          ? channel.messages[channel.messages.length - 1].emoticon &&
+            Object.values(
+              channel.messages[channel.messages.length - 1].emoticon
+            ) !== 0
+            ? "(이모티콘)"
+            : channel.messages[channel.messages.length - 1].content
+            ? channel.messages[channel.messages.length - 1].content
+            : ""
           : "";
 
       return (
@@ -484,7 +710,23 @@ class App extends Component {
 
     const channelItems = this.state.channels.map(mapChannelItems);
 
-    return <List>{channelItems}</List>;
+    const addChannelItem = (
+      <ListItem button key={-1} onClick={() => this.toggleAddingChatRoom()}>
+        <ListItemText
+          style={styles.chatRoomText}
+          primary={"채팅추가"}
+          secondary={"이메일로 상대를 찾습니다."}
+        />
+      </ListItem>
+    );
+
+    return (
+      <List>
+        {addChannelItem}
+        <Divider />
+        {channelItems}
+      </List>
+    );
   }
 
   renderChannelsHeader() {
@@ -526,7 +768,7 @@ class App extends Component {
             <Typography variant="h6" color="inherit">
               {friend ? friend.displayName : "알 수 없는 사용자"}
             </Typography>
-            { this.state.loadingMessages && <CircularProgress /> }
+            {this.state.loadingMessages && <CircularProgress />}
           </Toolbar>
         </AppBar>
       );
@@ -544,33 +786,176 @@ class App extends Component {
     );
   }
 
+  renderToolbar() {
+    const toggleDrawer = () => {
+      this.setState({ isDrawerOpen: !this.state.isDrawerOpen });
+    };
+    const drawerOnCloseCallback = event => {
+      if (!event) return;
+      if (
+        event.type === "keydown" &&
+        (event.key === "Tab" || event.key === "Shift")
+      ) {
+        return;
+      }
+      toggleDrawer();
+    };
+
+    let chatRoomName = "";
+
+    if (Object.keys(this.state.selectedChannel).length === 0) {
+      chatRoomName = "채팅방을 선택해주세요.";
+    } else {
+      const friend = this.state.selectedChannel.userModels.find(
+        model => model.id !== this.state.user.id
+      );
+      chatRoomName = friend ? friend.displayName : "알 수 없는 사용자";
+    }
+
+    return (
+      <Toolbar>
+        <IconButton
+          edge="start"
+          color="inherit"
+          aria-label="menu"
+          onClick={toggleDrawer}
+        >
+          <MenuIcon />
+        </IconButton>
+        <Drawer
+          anchor={"left"}
+          open={this.state.isDrawerOpen}
+          onClose={drawerOnCloseCallback}
+        >
+          {this.renderChannels()}
+        </Drawer>
+        <div style={{ flex: 1, display: "inline-flex" }}>
+          <Typography variant="h6">{chatRoomName}</Typography>
+          {this.state.loadingMessages && (
+            <CircularProgress size={24} color="secondary" />
+          )}
+        </div>
+        {this.renderMenu()}
+      </Toolbar>
+    );
+  }
+
+  renderMenu() {
+    let menuItemJSX = [];
+
+    const handleMenu = event => {
+      this.menuAnchorEl = event.currentTarget;
+      toggleMenu();
+    };
+
+    const toggleMenu = () => {
+      this.setState({ isMenuOpen: !this.state.isDrawerOpen });
+    };
+
+    const menuOnCloseCallback = event => {
+      this.setState({ isMenuOpen: false });
+      this.menuAnchorEl = null;
+    };
+
+    if (Object.keys(this.state.selectedChannel).length !== 0) {
+      const handleLeave = () => {
+        this.leaveChatRoom();
+      };
+
+      const leaveDialog = (
+        <div>
+          <Dialog
+            open={this.state.isLeaving}
+            aria-labelledby="alert-dialog-title"
+            aria-describedby="alert-dialog-description"
+          >
+            <DialogTitle id="alert-dialog-title">
+              {"채팅방을 나가시겠습니까?"}
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText id="alert-dialog-description">
+                채팅방에서 나가면 다시 입장할 수 없습니다. (새 채팅을 시작하는
+                것은 가능합니다.)
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => this.setState({ isLeaving: false })}
+                color="primary"
+              >
+                취소
+              </Button>
+              <Button onClick={handleLeave} color="primary" autoFocus>
+                나가기
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </div>
+      );
+
+      menuItemJSX.push(
+        <MenuItem onClick={() => this.setState({ isLeaving: true })}>
+          채팅방 나가기
+          {leaveDialog}
+        </MenuItem>
+      );
+    }
+
+    if (this.state.isAuthenticated) {
+      menuItemJSX.push(
+        <MenuItem onClick={() => this.signOut()}>로그아웃</MenuItem>
+      );
+    }
+
+    return (
+      <div>
+        <IconButton
+          edge="end"
+          aria-label="display more actions"
+          aria-controls="menu-appbar"
+          aria-haspopup="true"
+          color="inherit"
+          onClick={handleMenu}
+        >
+          <MoreIcon />
+        </IconButton>
+        <Menu
+          id="menu-appbar"
+          anchorEl={this.menuAnchorEl}
+          anchorOrigin={{
+            vertical: "top",
+            horizontal: "right"
+          }}
+          keepMounted
+          transformOrigin={{
+            vertical: "top",
+            horizontal: "right"
+          }}
+          open={this.state.isMenuOpen}
+          onClose={menuOnCloseCallback}
+        >
+          {menuItemJSX}
+        </Menu>
+      </div>
+    );
+  }
+
   render() {
     return (
       <div style={styles.container}>
+        <AppBar position="static">{this.renderToolbar()}</AppBar>
         {this.renderAuthPopup()}
         {this.renderAddChatRoomPopup()}
-        <div style={styles.channelList}>
-          {this.renderChannelsHeader()}
-          {this.renderChannels()}
-        </div>
-        <div style={styles.chat}>
-          {this.renderChatHeader()}
-          {this.renderChat()}
-        </div>
-        <div style={styles.settings}>
-          {this.renderSettingsHeader()}
-          {this.renderSignOutButton()}
-        </div>
+        {this.renderChat()}
       </div>
     );
   }
 }
-
 const styles = {
   container: {
     flex: 1,
     display: "flex",
-    flexDirection: "row",
+    flexDirection: "column",
     height: "100vh"
   },
   channelList: {
@@ -594,6 +979,19 @@ const styles = {
   },
   chatRoomText: {
     marginLeft: 10
+  },
+  image: {
+    width: 150,
+    height: 100,
+    borderRadius: 13,
+    margin: 3,
+    resizeMode: "cover"
+  },
+  menuButton: {
+    marginRight: 2
+  },
+  title: {
+    flexGrow: 1
   }
 };
 
