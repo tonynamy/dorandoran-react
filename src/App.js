@@ -181,7 +181,20 @@ class App extends Component {
       chatRooms.push(chatRoom);
     }
 
-    this.setState({ channels: chatRooms });
+    chatRooms.sort(function(a, b) {
+      if ( ( a.messages && a.messages.length > 0 ? new Date(a.messages[a.messages.length-1]).getTime() : new Date(a.createdAt).getTime() ) <
+           ( b.messages && b.messages.length > 0 ? new Date(b.messages[b.messages.length-1]).getTime() : new Date(b.createdAt).getTime() ) ) {
+        return -1;
+      }
+      if (( a.messages && a.messages.length > 0 ? new Date(a.messages[a.messages.length-1]).getTime() : new Date(a.createdAt).getTime() ) >
+           ( b.messages && b.messages.length > 0 ? new Date(b.messages[b.messages.length-1]).getTime() : new Date(b.createdAt).getTime() ) ) {
+        return 1;
+      }
+      // a must be equal to b
+      return 0;
+    });
+
+    this.setState({ channels: chatRooms.reverse() });
   }
 
   onChatRoomClicked(chatroom_id) {
