@@ -100,16 +100,32 @@ class App extends Component {
 
   async signOut() {
     await firebase.auth().signOut();
+    this.setState({
+      messages: [],
+      user: {},
+      channels: [],
+      isAuthenticated: false,
+      addingChatRoom: false,
+      selectedChannel: {},
+      channelUsers: [],
+      isLeaving: false,
+      loadingMessages: false,
+      isShowingEmoticons: false,
+      emoticonTabNum: 0,
+      emoticonPacks: null,
+      isDrawerOpen: false,
+      isMenuOpen: false
+    });
   }
 
   async handleAuthEvent(user) {
     if (user) {
-      let result = db.collection("users").doc(user.uid).get();
+      let result = await db.collection("users").doc(user.uid).get();
 
-      if (result.empty) {
+      if (!result.exists) {
         // 신규회원
 
-        await db.collection("chatrooms").doc(user.uid).set({
+        await db.collection("users").doc(user.uid).set({
           displayName: user.displayName,
           email: user.email,
           profileImage: user.photoURL
