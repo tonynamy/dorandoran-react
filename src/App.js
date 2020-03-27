@@ -182,14 +182,15 @@ class App extends Component {
     }
 
     chatRooms.sort(function(a, b) {
-      if ( ( a.messages && a.messages.length > 0 ? new Date(a.messages[a.messages.length-1]).getTime() : new Date(a.createdAt).getTime() ) <
-           ( b.messages && b.messages.length > 0 ? new Date(b.messages[b.messages.length-1]).getTime() : new Date(b.createdAt).getTime() ) ) {
+      if ( ( a.messages && a.messages.length > 0 && a.messages[a.messages.length-1].hasOwnProperty("createdAt") ? a.messages[a.messages.length-1].createdAt.seconds : a.createdAt.seconds ) <
+           ( b.messages && b.messages.length > 0 && b.messages[b.messages.length-1].hasOwnProperty("createdAt") ? b.messages[b.messages.length-1].createdAt.seconds : b.createdAt.seconds ) ) {
         return -1;
       }
-      if (( a.messages && a.messages.length > 0 ? new Date(a.messages[a.messages.length-1]).getTime() : new Date(a.createdAt).getTime() ) >
-           ( b.messages && b.messages.length > 0 ? new Date(b.messages[b.messages.length-1]).getTime() : new Date(b.createdAt).getTime() ) ) {
+      if (( a.messages && a.messages.length > 0 && a.messages[a.messages.length-1].hasOwnProperty("createdAt") ? a.messages[a.messages.length-1].createdAt.seconds : a.createdAt.seconds ) >
+           ( b.messages && b.messages.length > 0 && b.messages[b.messages.length-1].hasOwnProperty("createdAt") ? b.messages[b.messages.length-1].createdAt.seconds : b.createdAt.seconds ) ) {
         return 1;
       }
+
       // a must be equal to b
       return 0;
     });
@@ -679,7 +680,6 @@ class App extends Component {
         renderMessageImage={messageImageRenderer}
         scrollToBottom={true}
         locale="ko"
-        scrollToBottom="true"
         dateFormat="YYYY년 MM월 DD일 dddd"
       />
     );
