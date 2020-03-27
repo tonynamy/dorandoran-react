@@ -182,12 +182,12 @@ class App extends Component {
     }
 
     chatRooms.sort(function(a, b) {
-      if ( ( a.messages && a.messages.length > 0 && a.messages[a.messages.length-1].hasOwnProperty("createdAt") ? a.messages[a.messages.length-1].createdAt.seconds : a.createdAt.seconds ) <
-           ( b.messages && b.messages.length > 0 && b.messages[b.messages.length-1].hasOwnProperty("createdAt") ? b.messages[b.messages.length-1].createdAt.seconds : b.createdAt.seconds ) ) {
+      if ( ( a.messages && a.messages.length > 0 && a.messages[a.messages.length-1].hasOwnProperty("createdAt") && a.messages[a.messages.length-1].createdAt.hasOwnProperty("seconds") ? a.messages[a.messages.length-1].createdAt.seconds : (a.hasOwnProperty("createdAt") ? a.createdAt.seconds : -1) ) <
+           ( b.messages && b.messages.length > 0 && b.messages[b.messages.length-1].hasOwnProperty("createdAt") && b.messages[b.messages.length-1].createdAt.hasOwnProperty("seconds") ? b.messages[b.messages.length-1].createdAt.seconds :(b.hasOwnProperty("createdAt") ? b.createdAt.seconds : -1) ) ) {
         return -1;
       }
-      if (( a.messages && a.messages.length > 0 && a.messages[a.messages.length-1].hasOwnProperty("createdAt") ? a.messages[a.messages.length-1].createdAt.seconds : a.createdAt.seconds ) >
-           ( b.messages && b.messages.length > 0 && b.messages[b.messages.length-1].hasOwnProperty("createdAt") ? b.messages[b.messages.length-1].createdAt.seconds : b.createdAt.seconds ) ) {
+      if (( a.messages && a.messages.length > 0 && a.messages[a.messages.length-1].hasOwnProperty("createdAt") && a.messages[a.messages.length-1].createdAt.hasOwnProperty("seconds") ? a.messages[a.messages.length-1].createdAt.seconds : (a.hasOwnProperty("createdAt") ? a.createdAt.seconds : -1) ) >
+           ( b.messages && b.messages.length > 0 && b.messages[b.messages.length-1].hasOwnProperty("createdAt") && b.messages[b.messages.length-1].createdAt.hasOwnProperty("seconds") ? b.messages[b.messages.length-1].createdAt.seconds : (b.hasOwnProperty("createdAt") ? b.createdAt.seconds : -1) ) ) {
         return 1;
       }
 
@@ -349,7 +349,8 @@ class App extends Component {
 
       await db.collection("chatrooms").add({
         displayName: result.docs[0].data().displayName,
-        users: [me, friend]
+        users: [me, friend],
+        createdAt: new Date()
       });
 
       this.setState({ addingChatRoom: false, addChatingEmailAddress: "" });
